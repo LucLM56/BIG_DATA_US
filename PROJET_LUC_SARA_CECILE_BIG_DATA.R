@@ -15,6 +15,7 @@ library(e1071)
 library(FactoMineR)
 library(cluster)
 library(NbClust) 
+library(corrplot)
 
 ##################### IMPORTATION ET PREMIERS TRAITEMENTS ##################################
 setwd("D:/Dossiers/Etudes/M2 EKAP/Big Data/Projet")
@@ -105,6 +106,9 @@ write.csv(base3, "D:/Dossiers/Etudes/M2 EKAP/Big Data/Projet/base_us.csv")
 #######################################################################################################"
 
 
+
+
+
 ####################### STAT DESC ##################################################"
 summary(base3$INDPRO)
 sd(base3$INDPRO)
@@ -151,369 +155,25 @@ round(qual*100,2) #Qualité = 53 %
 
 
 ###################### CORRELATION ######################################################
-corrplot(base3[,2:125], method="color")
-#######################################################################################
+cor_base3 <- cor(base3[,2:125])
+corrplot(cor_base3, tl.pos="n")
 
-#--------------------------------------------------------------------------------------------------------
+#Recherche des corrélations les plus importantes :
 
-
-dlbase <- read_excel("C:/Users/E20E816N/Downloads/dlbase.xlsx", sheet = "dlbase")
-dlbase <- data.frame(dlbase) # sinon erreur pour la suite
-summary(dlbase)
-str(dlbase)
-training_dlbase <- dlbase
-data.frame(training_dlbase)
-
-# Correlations
-library(corrplot)
-par(mfrow=c(1,1))
-cor1 <- cor(dlbase[1:11],use="complete.obs",method=c("spearman"))
-col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
-corrplot(cor1, method="color", col=col(200), 
-         type="upper",
-         addCoef.col = "black")
-
-par(mfrow=c(1,1))
-cor2 <- cor(dlbase[,c(1,12:22)],use="complete.obs",method=c("spearman"))
-col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
-corrplot(cor2, method="color", col=col(200), 
-         type="upper",
-         addCoef.col = "black")
-
-cor3 <- cor(dlbase[1:11],use="complete.obs",method=c("spearman"))
-corrplot(cor3)
-cor(dlbase[1:10])
-
-cor4 <- cor(dlbase[,c(1,12:22)],use="complete.obs",method=c("spearman"))
-corrplot(cor4)
-
-
-#---------------------------------------------------------------------
-#---------------------------------------------------------------------
-# Penalized regressions
-
-# standardized y and x (centered and standardized)
-library(dplyr)
-y <- data.frame(training_dlbase) %>%
-  select(WTI) %>%
-  scale(center = T, scale = T) %>%
-  as.matrix()
-
-x <- data.frame(training_dlbase) %>%
-  select(-WTI) %>% # on retire la variable à expliquer y
-  scale(center = T, scale = T) %>%
-  as.matrix()
-
-#---------------------------------------------------------------------
-#---------------------------------------------------------------------
-# Ridge regression
-model_cv <- glmnet(x, y, alpha = 0, standardize = T) #quand on a mis alpha =0 donc c du ridge 
-plot(model_cv)
-#to ce qui est en bas jusqu'a plot (ridge cv ) c la cross validation en ridge 
-# 10-folds CV to choose lambda : on fixe a 10 par défaut 
-# seq(-3, 5, length.out = 100) : random sequence of 100 numbers betwwene -3 and 5 : essayer une 100 ene de fois 
-lambdas_to_try <- 10^seq(-3, 5, length.out = 100)#on le stoque dans lamda to try 
-
-# alpha = 0, implementation of ridge regression
-# choix du meilleur lambda parmi 100
-ridge_cv <- cv.glmnet(x, y, alpha = 0, lambda = lambdas_to_try, standardize = T, nfolds = 10)#cross validation avec 10 blocs  
-
-# Figures of lambdas
-plot(ridge_cv) 
-
-# Best lambda obtained from CV (lambda.min) - other possibility: lambda.1se
-lambda_cv <- ridge_cv$lambda.min #trouver le lamda minimum 
-lambda_cv #comment pénaliser les données 0.265
-# Evaluation of the final model with the selected lambda
-model_cv <- glmnet(x, y, alpha = 0, lambda = lambda_cv, standardize = T)
-summary(model_cv)
-
-# Ridge betas
-model_cv$beta #???afficher tous les coefficients du ridge 
-
-#---------------------------------------------------------------------
-#---------------------------------------------------------------------
-# LASSO regression
-model_cv <- glmnet(x, y, alpha = 1, standardize = T)
-plot(model_cv)
-
-# 10-folds CV to choose lambda
-lambdas_to_try <- 10^seq(-3, 5, length.out = 100)
-
-# alpha = 1, implementation of Lasso regression
-lasso_cv <- cv.glmnet(x, y, alpha = 1, lambda = lambdas_to_try, standardize = T, nfolds = 10) # choix du meilleur lambda parmi 100
-
-# Figures of lambdas
-plot(lasso_cv)
-
-# Best lambda obtained from CV (lambda.1se) - other possibility: lambda.min
-lambda_cv <- lasso_cv$lambda.1se
-
-# Evaluation of the final model with the selected lambda
-model_cv <- glmnet(x, y, alpha = 1, lambda = lambda_cv, standardize = T)
-
-# Lasso betas
-model_cv$beta
-
-# Get the name of relevant variables
-which(! coef(model_cv) == 0, arr.ind = TRUE)
-
-#---------------------------------------------------------------------
-#---------------------------------------------------------------------
-# Elastic-Net regression with alpha = 0.5
-lambdas_to_try <- 10^seq(-3, 5, length.out = 100)
-en_cv <- cv.glmnet(x, y, alpha = 0.5, lambda = lambdas_to_try, standardize = T, nfolds = 10) 
-# Figures of lambdas
-plot(en_cv)
-lambda_cv <- en_cv$lambda.1se
-model_cv <- glmnet(x, y, alpha = 0.5, lambda = lambda_cv, standardize = T)
-# EN betas
-model_cv$beta
-# Get the name of relevant variables
-which(! coef(model_cv) == 0, arr.ind = TRUE)
-
-#---------------------------------------------------------------------
-#---------------------------------------------------------------------
-# Choose alpha sequencially with 0 < alpha < 1: a = {0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9}
-en_min <- NULL
-lambdas_to_try <- 10^seq(-3, 5, length.out = 100)
-alphalist <- seq(0.1,by=0.1)
-elasticnet <- lapply(alphalist, function(a){
-  cv.glmnet(x, y, alpha=a, lambda = lambdas_to_try, standardize = T, nfolds = 10)
-})
-for (i in 1:9) {
-  print(min(elasticnet[[i]]$cvm))
-  en_min <- c(en_min, min(elasticnet[[i]]$cvm))
+top_cor <- function(seuil,mat_cor){
+  compteur = 0
+  row_cor <- rownames(mat_cor)
+  col_cor <- colnames(mat_cor)
+  for (i in 1:(nrow(mat_cor)-1)){
+    for (j in (i+1):ncol(mat_cor)){
+      if (mat_cor[i,j]>seuil & mat_cor[i,j]< 1){
+        cat("Corrélation importante : ", row_cor[i], " et ", col_cor[j] , "(cor = ",mat_cor[i,j],")" , "\n")
+        compteur = compteur +1
+      }
+    }
+  }
+  cat("Nb de corrélations importantes : ", compteur)
 }
-elasticnet_cvm <- min(en_min)
-elasticnet_cvm #CA DONNE LA VALEUR QUI EST MINIMIS2E AIS C PAS ALPHA ON DOIT LA PRENDRE ET LA METTRE EN BAS 
 
-# Best lambda obtained from CV (lambda.1se) - other possibility: lambda.min
-en_cv <- cv.glmnet(x, y, alpha = 0.7, lambda = lambdas_to_try, standardize = T, nfolds = 10) #.LE ALPHA QUE J4AI MIS ICI C LE LA VALEUR MINIMISEE TROUVEE EN HAUT 
-# Figures of lambdas
-plot(en_cv)
-lambda_cv <- en_cv$lambda.1se
-model_cv <- glmnet(x, y, alpha = 0.5, lambda = lambda_cv, standardize = T)
-# EN betas
-model_cv$beta
-# Get the name of relevant variables
-which(! coef(model_cv) == 0, arr.ind = TRUE)  
-
-#---------------------------------------------------------------------
-#---------------------------------------------------------------------
-# Adaptive Lasso regression using Lasso to compute the weights in the first step
-model_cv <- glmnet(x, y, alpha = 1, lambda = lambda_cv, standardize = T)
-coef_lasso <- predict(model_cv,type="coef",s=lambda_cv)
-# Weighted with gamma = 0.5
-gamma = 0.5
-w0 <- 1/(abs(coef_lasso) + (1/length(y)))
-poids.lasso <- w0^(gamma)
-
-# Adaptive LASSO
-fit_adalasso <- glmnet(x, y, penalty.factor =poids.lasso)
-fit_cv_adalasso <- cv.glmnet(x, y,penalty.factor=poids.lasso)
-
-# Figure of lambdas 
-plot(fit_cv_adalasso)
-
-# Best lambda obtained from CV (lambda.1se) - other possibility: lambda.min
-lambda_cv <- fit_cv_adalasso$lambda.1se
-
-# Evaluation of the final model with the selected lambda
-model_cv <- glmnet(x, y, alpha = 1, lambda = lambda_cv, standardize = T)
-
-# Lasso betas
-model_cv$beta
-
-# Get the name of relevant variables
-which(! coef(model_cv) == 0, arr.ind = TRUE)
-
-#---------------------------------------------------------------------
-#---------------------------------------------------------------------
-# Adaptive Lasso regression using Ridge to compute the weights in the first step
-model_cv <- glmnet(x, y, alpha = 0, lambda = lambda_cv, standardize = T)
-coef_ridge <- predict(model_cv,type="coef",s=lambda_cv)
-# Weighted with gamma = 0.5
-gamma = 0.5
-w0 <- 1/(abs(coef_ridge) + (1/length(y)))
-poids.ridge <- w0^(gamma)
-
-# Adaptive LASSO
-fit_adalasso <- glmnet(x, y, penalty.factor =poids.ridge)
-fit_cv_adalasso <- cv.glmnet(x, y,penalty.factor=poids.ridge)
-
-# Figure of lambdas 
-plot(fit_cv_adalasso)
-
-# Best lambda obtained from CV (lambda.1se) - other possibility: lambda.min
-lambda_cv <- fit_cv_adalasso$lambda.1se
-
-# Evaluation of the final model with the selected lambda
-model_cv <- glmnet(x, y, alpha = 1, lambda = lambda_cv, standardize = T)
-
-# Lasso betas
-model_cv$beta
-
-# Get the name of relevant variables
-which(! coef(model_cv) == 0, arr.ind = TRUE)
-
-#--------------------------------------------------------------------
-#---------------------------------------------------------------------
-# Bridge regression
-# 10-folds CV to choose lambda
-# seq(-3, 5, length.out = 100) : random sequence of 100 numbers betwwene -3 and 5
-lambdas_to_try <- 10^seq(-3, 5, length.out = 100)
-
-# choix du meilleur lambda parmi 100
-bridge_cv <- cv.bridge(x, y, q=0.5, lambda = lambdas_to_try, nfolds = 10) 
-
-# Figures of lambdas
-plot(bridge_cv)
-
-# Best lambda obtained from CV (lambda.min) - other possibility: lambda.1se
-lambda_cv <- bridge_cv$lambda.min
-
-# Evaluation of the final model with the selected lambda
-model_cv <- bridge(x, y, q=0.5, lambda = lambda_cv)
-summary(model_cv)
-
-# Ridge betas
-model_cv$beta
-
-#----------------------------------------------------------------------
-#---------------------------------------------------------------------
-# Weighted fusion Lasso regressions
-
-# Initialization of parameters
-gamma=0.5
-mu=0.1
-
-# Compute pxQ matrix.
-cor.mat <- cor(x)
-abs.cor.mat <- abs(cor.mat)
-sign.mat <- sign(cor.mat) - diag(2, nrow(cor.mat))
-Wmat <- (abs.cor.mat^gamma - 1 * (abs.cor.mat == 1))/(1 -abs.cor.mat * (abs.cor.mat != 1))
-weight.vec <- apply(Wmat, 1, sum)
-fusion.penalty <- -sign.mat * (Wmat + diag(weight.vec))
-
-# Compute Cholesky decomposition
-R<-chol(fusion.penalty, pivot = TRUE)
-
-# Transform Weighted Fusion in a Lasso issue sur les donn´ees augment´ees (1.40).
-p<-dim(x)[2]
-xstar<-rbind(x,sqrt(mu)*R)
-ystar<-c(y,rep(0,p))
-
-# Apply Lasso .
-fit_wfusion<-glmnet(xstar,ystar)
-fit_cv_wfusion<-cv.glmnet(xstar,ystar)
-
-par(mfrow=c(1,2))
-plot(fit_wfusion,xvar ="lambda",label = FALSE,col=T,xlab=expression(log(lambda)))
-plot(fit_cv_wfusion,xlab=expression(log(lambda)))
-
-min(fit_cv_wfusion$cvm)
-lambda.opt<-fit_cv_wfusion$lambda.min
-
-# We obtain the estimator of beta_weighted-fusion
-fit_coef_wfusion<-predict(fit_wfusion,type="coef",s=lambda.opt)
-show(fit_coef_wfusion)
-
-#---------------------------------------------------------------------
-#---------------------------------------------------------------------
-# SCAD
-library(ncvreg)
-fit_SCAD=ncvreg(x, y, penalty = c("SCAD"))
-plot(fit_SCAD)
-summary(fit_SCAD, lambda=0.10)
-
-# Validation croisé pour le meilleur lambda 
-cvfit_SCAD=cv.ncvreg(x, y, penalty = c("SCAD"))
-plot(cvfit_SCAD)
-
-# On attribue le meilleur lambda 
-lambda_SCAD <- cvfit_SCAD$lambda.min
-
-#Modele finale 
-SCAD_Final=ncvreg(x, y, lambda=lambda_SCAD, alpha = 1)
-SCAD_Final$beta
-
-which(! coef(SCAD_Final) == 0, arr.ind = TRUE)
-
-#---------------------------------------------------------------------
-#---------------------------------------------------------------------
-# MCP
-library(ncvreg)
-fit_MCP=ncvreg(x, y, penalty = c("MCP"))
-plot(fit_MCP)
-summary(fit_MCP, lambda=0.10)
-
-# Validation croisé pour le meilleur lambda 
-cvfit_MCP=cv.ncvreg(x, y, penalty = c("MCP"))
-plot(cvfit_MCP)
-
-# On attribue le meilleur lambda 
-lambda_MCP <- cvfit_MCP$lambda.min
-
-#Modele finale 
-MCP_Final=ncvreg(x, y, lambda=lambda_MCP, alpha = 1)
-MCP_Final$beta
-
-which(! coef(MCP_Final) == 0, arr.ind = TRUE)
-
-
-#---------------------------------------------------------------------
-#---------------------------------------------------------------------
-#---------------------------------------------------------------------
-# GETS
-
-# convert tibble in matrix for the function arx
-class(dlbase[,2:22]) # tibble
-mX = data.matrix(training_dlbase[,2:22]) # ça marche !
-
-# ARX model with AR(1)
-Mod02WTI <- arx(training_dlbase$WTI, mc = T, ar = 1, mxreg = mX[, 1:21], vcov.type = "white") # car seulement les 2 premieres variables sont signif
-Mod02WTI 
-
-# GETS modelling
-getsm_WTI2 <- getsm(Mod02WTI) 
-getsm_WTI2
-
-# GETS betas
-coef.arx(getsm_WTI2)
-
-# Get the name of relevant variables
-names_mX <- names(coef.arx(getsm_WTI2))
-names_mX <- names_mX[-1] # on retire le ar1
-names_mX
-
-
-# GETS modelling without ARCH test
-getsm_WTI2b <- getsm(Mod02WTI, arch.LjungB=NULL) 
-getsm_WTI2b
-
-
-# GETS without AR(1)
-Mod02WTI <- arx(training_dlbase$WTI, mc = T, ar = NULL, mxreg = mX[, 1:21], vcov.type = "white") # car seulement les 2 premieres variables sont signif
-Mod02WTI
-getsm_WTI2 <- getsm(Mod02WTI) 
-getsm_WTI2
-
-
-# isat function
-yy <- dlbase[,1]
-isat(yy, sis=TRUE, iis=FALSE, plot=TRUE, t.pval=0.005)
-isat(yy, sis=FALSE, iis=TRUE, plot=TRUE, t.pval=0.005)
-isat(yy, sis=FALSE, iis=FALSE, tis=TRUE, plot=TRUE, t.pval=0.005)
-isat(yy, sis=TRUE, iis=TRUE, tis=TRUE, plot=TRUE, t.pval=0.005)
-
-
-
-
-
-
-
-
-
-
-
+top_cor(seuil = 0.95, mat_cor = cor_base3 )
+#######################################################################################
