@@ -16,7 +16,8 @@ library(FactoMineR)
 library(cluster)
 library(NbClust) 
 library(corrplot)
-
+library(openxlsx)
+library(tibble)
 
 ##################### IMPORTATION ET PREMIERS TRAITEMENTS ##################################
 setwd("D:/Dossiers/Etudes/M2 EKAP/Big Data/Projet")
@@ -102,8 +103,30 @@ cat("Nombre de variables stationnarisées : ", count, "/", n)
 base3 <- as.data.frame(base3)
 colnames(base3) <- nom_col
 
+#Deuxième passage dans le programme
+n <- ncol(base3)
+base4 = matrix(0,615,125)
+base4[,1] <- base3[-1,1]
+count = 0
+nom_col = names(base3)
+for (j in 2:n){
+  result_test <- adf.test(base3[,j])
+  if (result_test$p.value>0.05){
+    base4[,j] <- diff(base3[,j], differences = 1)
+    count = count + 1
+    cat("Variable stationnarisée : ", nom_col[j],"\n")
+  }else{
+    base4[,j] <- base3[-1,j]
+  }
+}
+cat("Nombre de variables stationnarisées : ", count, "/", n)
+
+base4 <- as.data.frame(base4)
+colnames(base4) <- nom_col
+#5 variables ont été différenciées à l'ordre 2
+
 #Export
-write.csv(base3, "D:/Dossiers/Etudes/M2 EKAP/Big Data/Projet/base_us.csv")
+write.csv(base4, "D:/Dossiers/Etudes/M2 EKAP/Big Data/Projet/base_us.csv")
 #######################################################################################################"
 
 
@@ -111,20 +134,20 @@ write.csv(base3, "D:/Dossiers/Etudes/M2 EKAP/Big Data/Projet/base_us.csv")
 
 
 ####################### STAT DESC ##################################################"
-summary(base3$INDPRO)
-sd(base3$INDPRO)
+summary(base4$INDPRO)
+sd(base4$INDPRO)
 #0.11 en moyenne avec un écart type de 0.46
-hist(base3$INDPRO, col = "blue", freq=F, xlab="INDPRO", ylab="Densité", main="Production industrielle aux USA")
-curve(dnorm(x, mean=mean(base3$INDPRO), sd=sd(base3$INDPRO)),col="red", lwd=2, add=TRUE, yaxt="n")
+hist(base4$INDPRO, col = "blue", freq=F, xlab="INDPRO", ylab="Densité", main="Production industrielle aux USA")
+curve(dnorm(x, mean=mean(base4$INDPRO), sd=sd(base4$INDPRO)),col="red", lwd=2, add=TRUE, yaxt="n")
 #Distribution proche d'une loi normale, voir les tests 
-boxplot(base3$INDPRO, col = "blue", main="Production industrielle aux USA")
+boxplot(base4$INDPRO, col = "blue", main="Production industrielle aux USA")
 #Quelques points extrêmes à la fin de la distribution
 #Stat de normalité :
 #skweness - coef d'asymétrie
-skewness(base3$INDPRO) 
+skewness(base4$INDPRO) 
 # -0.7090, légèrement négatif donc distribution trop décalée à droite de la médiane
 #kurtosis - coef d'applatissement
-kurtosis(base3$INDPRO) 
+kurtosis(base4$INDPRO) 
 # 2.3951 - La distribution est trop pointue
 ################################################################################################"
 
@@ -132,10 +155,10 @@ kurtosis(base3$INDPRO)
 
 
 ##################### CLASSIFICATION ##################################################"
-acp <- PCA(base3[,c(2:125)])
+acp <- PCA(base4[,c(2:125)])
 #On oberseve des paquets de variables
 barplot(acp$eig[,2], xlab="Dim", ylab ="Percentage of variance", col = 9)
-base3cr<-scale(base3[,c(2:125)],center=T,scale=T) #Pour centrer réduire
+base3cr<-scale(base4[,c(2:125)],center=T,scale=T) #Pour centrer réduire
 pol.dist <- dist(base3cr,method="euc") #Pour calculer la distance
 class0 <- hclust(pol.dist, method="ward.D2") #Pour faire les classes
 plot(as.dendrogram(class0),main="Dendrogramme") #Pour obtenir le dendogramme avec la méthode Ward.
@@ -156,8 +179,8 @@ round(qual*100,2) #Qualité = 53 %
 
 
 ###################### CORRELATION ######################################################
-cor_base3 <- cor(base3[,2:125], method = "spearman")
-corrplot(cor_base3, tl.pos="n")
+cor_base4 <- cor(base4[,2:125], method = "spearman")
+corrplot(cor_base4, tl.pos="n")
 
 #Recherche des corrélations les plus importantes :
 
@@ -176,34 +199,36 @@ top_cor <- function(seuil_max, seuil_min,mat_cor){
   cat("Nb de corrélations importantes : ", compteur)
 }
 
-top_cor(seuil_max = 0.90,seuil_min=-0.90, mat_cor = cor_base3 )
+top_cor(seuil_max = 0.90,seuil_min=-0.90, mat_cor = cor_base4 )
 #######################################################################################
 
 
 #################### Méthode GETS #############################################################
-class(base3[,2:125]) #"data.frame"
-#On supprime la data (première colonne) car embettant pour la suite
-base3 <- base3[,-1]
-mX = data.matrix(base3[,-6]) # retire la var à expliquer et garde toutes les autres
+#Certaines variables sont des combinaisons linéaires d'autres variables. 
+#Il faut les retirer pour la méthode GETS
+#On supprime aussi la date (première colonne) car embettant pour la suite
+base4 <- base4[,-1]
 
-model <- arx(base3$INDPRO, 
+#Retirer : INDPRO, PAYEMS, HOUST, PERMIT, CPIAUCSL, PCEPI
+mX = data.matrix(base4[,-c(6,32,48,53,104, 114)]) # retire la var à expliquer et var concernées par la multicolinéarité et garde toutes les autres
+
+model <- arx(base4$INDPRO, 
              mc = TRUE, 
              ar = NULL, 
              mxreg = mX, #Contient toutes les variables explicatives : 124 colonnes
              vcov.type = "white") 
-model
+
 getsm <- getsm(model) 
 getsm #Ne fonctionne pas, pb de diagnostic
 
-# GETS betas
-coef.arx(getsm)
-
-# Get the name of relevant variables
-names_mX <- names(coef.arx(getsm))
-names_mX
-
 #Problème de diagnostic - correction :
 # GETS modelling without ARCH test
-getsm2 <- getsm(model, arch.LjungB=NULL) #Fonctionne seulement sur un nombre plus faibles de variables
-coef.arx(getsm2)
+getsm2 <- getsm(model, arch.LjungB=NULL)
+result_gets <- as.data.frame(getsm2$gum.mean)
+
+result_gets <- tibble::rownames_to_column(result_gets, "Variable")
+result_gets[,c(4:7)] <- round(result_gets[,c(4:7)],4)
+
+#Enregistrement des résultats :
+#write.xlsx(result_gets, file = "result_gets.xlsx" , overwrite =T)
 ################################################################################################
