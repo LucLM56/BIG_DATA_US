@@ -17,6 +17,7 @@ library(cluster)
 library(NbClust) 
 library(corrplot)
 
+
 ##################### IMPORTATION ET PREMIERS TRAITEMENTS ##################################
 setwd("D:/Dossiers/Etudes/M2 EKAP/Big Data/Projet")
 base <- read.csv("US.csv", sep=",")
@@ -155,18 +156,18 @@ round(qual*100,2) #Qualité = 53 %
 
 
 ###################### CORRELATION ######################################################
-cor_base3 <- cor(base3[,2:125])
+cor_base3 <- cor(base3[,2:125], method = "spearman")
 corrplot(cor_base3, tl.pos="n")
 
 #Recherche des corrélations les plus importantes :
 
-top_cor <- function(seuil,mat_cor){
+top_cor <- function(seuil_max, seuil_min,mat_cor){
   compteur = 0
   row_cor <- rownames(mat_cor)
   col_cor <- colnames(mat_cor)
   for (i in 1:(nrow(mat_cor)-1)){
     for (j in (i+1):ncol(mat_cor)){
-      if (mat_cor[i,j]>seuil & mat_cor[i,j]< 1){
+      if ((mat_cor[i,j]>seuil_max & mat_cor[i,j]< 1) | (mat_cor[i,j]< seuil_min & mat_cor[i,j]>-1)){
         cat("Corrélation importante : ", row_cor[i], " et ", col_cor[j] , "(cor = ",mat_cor[i,j],")" , "\n")
         compteur = compteur +1
       }
@@ -175,5 +176,34 @@ top_cor <- function(seuil,mat_cor){
   cat("Nb de corrélations importantes : ", compteur)
 }
 
-top_cor(seuil = 0.95, mat_cor = cor_base3 )
+top_cor(seuil_max = 0.90,seuil_min=-0.90, mat_cor = cor_base3 )
 #######################################################################################
+
+
+#################### Méthode GETS #############################################################
+class(base3[,2:125]) #"data.frame"
+#On supprime la data (première colonne) car embettant pour la suite
+base3 <- base3[,-1]
+mX = data.matrix(base3[,-6]) # retire la var à expliquer et garde toutes les autres
+
+model <- arx(base3$INDPRO, 
+             mc = TRUE, 
+             ar = NULL, 
+             mxreg = mX, #Contient toutes les variables explicatives : 124 colonnes
+             vcov.type = "white") 
+model
+getsm <- getsm(model) 
+getsm #Ne fonctionne pas, pb de diagnostic
+
+# GETS betas
+coef.arx(getsm)
+
+# Get the name of relevant variables
+names_mX <- names(coef.arx(getsm))
+names_mX
+
+#Problème de diagnostic - correction :
+# GETS modelling without ARCH test
+getsm2 <- getsm(model, arch.LjungB=NULL) #Fonctionne seulement sur un nombre plus faibles de variables
+coef.arx(getsm2)
+################################################################################################
