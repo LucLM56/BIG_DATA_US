@@ -1,4 +1,4 @@
-#####TD 1 DU BIG DATA ##############
+# CÈcile MOCHER - Sara MEZIANI - Luc LE MEE - M2 EKAP
 
 # libraries
 library(readxl)
@@ -21,7 +21,8 @@ library(tibble)
 library(ncvreg)
 
 ##################### IMPORTATION ET PREMIERS TRAITEMENTS ##################################
-setwd("/Users/cecilemocher/Documents/M2/EconomeÃÅtrie des big data/Projet Bigdata")
+#setwd("/Users/cecilemocher/Documents/M2/Econometrie des big data/Projet Bigdata")
+setwd("D:/Dossiers/Etudes/M2 EKAP/Big Data/Projet")
 base <- read.csv("US.csv", sep=",")
 
 str(base)
@@ -201,17 +202,23 @@ top_cor <- function(seuil_max, seuil_min,mat_cor){
 }
 
 top_cor(seuil_max = 0.90,seuil_min=-0.90, mat_cor = cor_base4 )
-#######################################################################################
+######################################################################################
+
+
 
 
 #################### Methode GETS #############################################################
 #Certaines variables sont des combinaisons lineaires d'autres variables. 
 #Il faut les retirer pour la methode GETS
-#On supprime aussi la date (premiere colonne) car embettant pour la suite
+
 base4 <- base4[,-1]
+base4 <- base4[-c(604,615),]
+base4_test <- base4[c(604,615),]
+
 
 #Retirer : INDPRO, PAYEMS, HOUST, PERMIT, CPIAUCSL, PCEPI
-mX = data.matrix(base4[,-c(6,32,48,53,104, 114)]) # retire la var a expliquer et var concernees par la multicolinearite et garde toutes les autres
+mX = data.matrix(base4[,-c(6,32,48,53,104, 114,90)]) # retire la var a expliquer et var concernees par la multicolinearite et garde toutes les autres
+
 
 model <- arx(base4$INDPRO, 
              mc = TRUE, 
@@ -219,19 +226,24 @@ model <- arx(base4$INDPRO,
              mxreg = mX, #Contient toutes les variables explicatives : 124 colonnes
              vcov.type = "white") 
 
-getsm <- getsm(model) 
-getsm #Ne fonctionne pas, pb de diagnostic
+#getsm <- getsm(model) 
+#getsm #Ne fonctionne pas, pb de diagnostic
 
 #Probleme de diagnostic - correction :
 # GETS modelling without ARCH test
 getsm2 <- getsm(model, arch.LjungB=NULL)
-result_gets <- as.data.frame(getsm2$gum.mean)
+getsm2$aux$mXnames
+getsm2$mean.results
+result_gets <- as.data.frame(getsm2$mean.results)
+
 
 result_gets <- tibble::rownames_to_column(result_gets, "Variable")
-result_gets[,c(4:7)] <- round(result_gets[,c(4:7)],4)
+result_gets[,c(2:5)] <- round(result_gets[,c(2:5)],4)
+result_gets
+
 
 #Enregistrement des resultats :
-#write.xlsx(result_gets, file = "result_gets.xlsx" , overwrite =T)
+write.xlsx(result_gets, file = "result_gets.xlsx" , overwrite =T)
 ################################################################################################
 
 
