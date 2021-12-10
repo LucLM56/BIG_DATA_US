@@ -19,6 +19,8 @@ library(corrplot)
 library(openxlsx)
 library(tibble)
 library(ncvreg)
+library(randomForest)
+library(caret)
 
 ##################### IMPORTATION ET PREMIERS TRAITEMENTS ##################################
 #setwd("/Users/cecilemocher/Documents/M2/Econometrie des big data/Projet Bigdata")
@@ -212,8 +214,11 @@ top_cor(seuil_max = 0.90,seuil_min=-0.90, mat_cor = cor_base4 )
 #Il faut les retirer pour la methode GETS
 
 base4 <- base4[,-1]
-base4 <- base4[-c(604,615),]
-base4_test <- base4[c(604,615),]
+base4_test <- base4[c(604:615),]
+base4_test_y <- as.matrix(base4_test[,6])
+base4_test <-as.matrix(base4_test[,-6])
+base4 <- base4[-c(604:615),]
+
 
 
 #Retirer : INDPRO, PAYEMS, HOUST, PERMIT, CPIAUCSL, PCEPI
@@ -241,9 +246,11 @@ result_gets <- tibble::rownames_to_column(result_gets, "Variable")
 result_gets[,c(2:5)] <- round(result_gets[,c(2:5)],4)
 result_gets
 
-
+#Prévision
+GETS_predict <- predict(getsm2, base4_test) #Ne fonctionne pas
+GETS_predict
 #Enregistrement des resultats :
-write.xlsx(result_gets, file = "result_gets.xlsx" , overwrite =T)
+#write.xlsx(result_gets, file = "result_gets.xlsx" , overwrite =T)
 ################################################################################################
 
 
@@ -285,8 +292,16 @@ model_cv <- glmnet(x, y, alpha = 0, lambda = lambda_cv, standardize = T)
 summary(model_cv)
 
 # Ridge betas
-model_cv$beta
+beta_ridge <- as.matrix(model_cv$beta)
+beta_ridge <- as.data.frame(beta_ridge)
+beta_ridge <- tibble::rownames_to_column(beta_ridge, "Variable")
+beta_ridge[,2] <- round(beta_ridge[,2],4)
+beta_ridge
+#write.xlsx(beta_ridge, file = "beta_ridge.xlsx" , overwrite =T)
 
+#Prévision
+RIDGE_predict <- predict(model_cv, base4_test) #Ne fonctionne pas
+RIDGE_predict #Prévision pour ridge
 
 #---------------------------------------------------------------------------------------------
 # LASSO regression
@@ -315,7 +330,18 @@ model_cv$beta
 # Get the name of relevant variables
 which(! coef(model_cv) == 0, arr.ind = TRUE)
 
+beta_lasso<- as.matrix(model_cv$beta)
+beta_lasso <- as.data.frame(beta_lasso)
+beta_lasso <- tibble::rownames_to_column(beta_lasso, "Variable")
+beta_lasso <- beta_lasso[beta_lasso$s0!=0,]
+beta_lasso[,2] <- round(beta_lasso[,2],4)
+beta_lasso
 
+#write.xlsx(beta_lasso, file = "beta_lasso.xlsx" , overwrite =T)
+
+#Prévision
+LASSO_predict <- predict(model_cv, base4_test) #Ne fonctionne pas
+LASSO_predict #Prévision pour LASSO
 
 #---------------------------------------------------------------------------------------------
 # Elastic-Net regression with alpha = 0.5
@@ -330,6 +356,18 @@ model_cv$beta
 # Get the name of relevant variables
 which(! coef(model_cv) == 0, arr.ind = TRUE)
 
+beta_elastic<- as.matrix(model_cv$beta)
+beta_elastic <- as.data.frame(beta_elastic)
+beta_elastic <- tibble::rownames_to_column(beta_elastic, "Variable")
+beta_elastic <- beta_elastic[beta_elastic$s0!=0,]
+beta_elastic[,2] <- round(beta_elastic[,2],4)
+beta_elastic #29 variables
+
+#write.xlsx(beta_elastic, file = "beta_elastic.xlsx" , overwrite =T)
+
+#Prévision
+Elastic_NET_predict <- predict(model_cv, base4_test) #Ne fonctionne pas
+Elastic_NET_predict #Prévision pour Elastic NET
 
 #-------------------------
 # Elastic-Net regression avec selection de ALPHA
@@ -345,7 +383,7 @@ for (i in 1:9) {
   en_min <- c(en_min, min(elasticnet[[i]]$cvm))
 }
 elasticnet_cvm <- min(en_min)
-elasticnet_cvm # !!!!! ne donne pas la valeur de alpha : il donne la valeur liÃ©e au 9 valeur de a : ici on a ALPHA=0.9
+elasticnet_cvm # !!!!! ne donne pas la valeur de alpha : il donne la valeur liÃ©e au 9 valeur de a : ici on a ALPHA=0.5
 
 
 
@@ -384,7 +422,18 @@ SCAD_Final$beta
 # Get the name of relevant variables
 which(! coef(SCAD_Final) == 0, arr.ind = TRUE)
 
+beta_SCAD<- as.matrix(SCAD_Final$beta)
+beta_SCAD <- as.data.frame(beta_SCAD)
+beta_SCAD <- tibble::rownames_to_column(beta_SCAD, "Variable")
+beta_SCAD <- beta_SCAD[beta_SCAD[,2]!=0,]
+beta_SCAD[,2] <- round(beta_SCAD[,2],4)
+beta_SCAD #29 variables
 
+#write.xlsx(beta_SCAD, file = "beta_SCAD.xlsx" , overwrite =T)
+
+#Prévision
+SCAD_predict <- predict(SCAD_Final, base4_test) #Ne fonctionne pas
+SCAD_predict #Prévision pour SCAD
 
 #---------------------------------------------------------------------
 # Adaptive Lasso regression using Lasso to compute the weights in the first step
@@ -414,7 +463,90 @@ model_cv$beta
 # Get the name of relevant variables
 which(! coef(model_cv) == 0, arr.ind = TRUE)
 
+beta_Alasso<- as.matrix(model_cv$beta)
+beta_Alasso <- as.data.frame(beta_Alasso)
+beta_Alasso <- tibble::rownames_to_column(beta_Alasso, "Variable")
+beta_Alasso <- beta_Alasso[beta_Alasso[,2]!=0,]
+beta_Alasso[,2] <- round(beta_Alasso[,2],4)
+beta_Alasso #29 variables
+
+#write.xlsx(beta_Alasso, file = "beta_Alasso.xlsx" , overwrite =T)
+
+#Prévision
+Alasso_predict <- predict(SCAD_Final, base4_test) #Ne fonctionne pas
+Alasso_predict #Prévision pour Adaptative LASSO
+############################################################################################
 
 
 
+
+######################## METHODE NON LINEAIRE ########################################################
+library("VSURF")
+set.seed(09122021)
+#tree_selection2 <- VSURF(x = x, y = y, mtry = 100) #Long - environ 2H
+tree_selection2$varselect.thres # 6  12  15   7   9  13  70  50 122  73  88  64  17  16  75  44  63  93  89  62  69  30  57  90   8  77  58  85  29  86  87  74 106  91  40  36   4
+tree_selection2$varselect.interp # 6  12  15   7   9  13  70  50 122  73  88  64  17  16  75  44  63  93  89  62  69  30
+tree_selection2$varselect.pred # 6  12  15   7   9  70  50 122  64  17  93  89  30
+
+#Interprétation
+select_tree_inter<- data.frame(colnames(base4[,tree_selection2$varselect.interp[-1]])) #supprime la première car var à expliquer donc forcément utilisée dans l'algo
+select_tree_inter[,2] <- "TRUE"
+colnames(select_tree_inter) <- c("Variable", "Sélectionnée")
+select_tree_inter
+#write.xlsx(select_tree_inter, file = "select_tree_inter.xlsx" , overwrite =T)
+
+#Prévision
+select_tree<- data.frame(colnames(base4[,tree_selection2$varselect.pred[-1]])) #supprime la première car var à expliquer donc forcément utilisée dans l'algo
+select_tree[,2] <- "TRUE"
+colnames(select_tree) <- c("Variable", "Sélectionnée")
+tree_selection2
+#write.xlsx(select_tree, file = "select_tree.xlsx" , overwrite =T)
+
+#Modèle à utiliser d'après les variables sélectionnées :
+#Sélection de la base
+base_RF <- base4[,tree_selection2$varselect.pred]
+rdf=randomForest(formula=INDPRO~.,data=base_RF, ntree=100, mtry=3, nodesize = 10)
+print(rdf)
+plot(rdf)
+
+RF_predict <- predict(rdf, base4_test )
+RF_predict #Prédiction pour RF
+#####################################################################################################
+
+
+####################### Assemblage des prévisions #####################################
+Prevision <- cbind(base4_test_y,RIDGE_predict, LASSO_predict,Alasso_predict,Elastic_NET_predict,SCAD_predict,RF_predict)
+colnames(Prevision) <- c("Observé", "RIDGE","LASSO","ADAPT. LASSO", "ELASTIC NET", "SCAD", "RF")
+#write.xlsx(Prevision, file = "Prevision.xlsx" , overwrite =T)
+#Manque GETS mais ne marche pas pour l'instant ...
+#######################################################################################
+
+
+
+############# Comparaison des différentes méthodes####################################
+
+#A exporter une fois que la dernière méthode (non linéaire) aura été faite
+Base_comparaison<- data.frame(colnames(base4))
+colnames(Base_comparaison) <- c("Variable")
+
+#Pour la mise en forme du tableau comparatif :
+result_gets[,6] <- "TRUE"
+beta_ridge[,3] <- "TRUE"
+beta_lasso[,3] <- "TRUE"
+beta_elastic[,3] <- "TRUE"
+beta_SCAD[,3] <- "TRUE"
+beta_Alasso[,3] <- "TRUE"
+
+Base_comparaison <- left_join(Base_comparaison,result_gets[,c(1,6)], by=c("Variable"))
+Base_comparaison <- left_join(Base_comparaison,beta_ridge[,c(1,3)], by=c("Variable"))
+Base_comparaison <- left_join(Base_comparaison,beta_lasso[,c(1,3)], by=c("Variable"))
+Base_comparaison <- left_join(Base_comparaison,beta_elastic[,c(1,3)], by=c("Variable"))
+Base_comparaison <- left_join(Base_comparaison,beta_SCAD[,c(1,3)], by=c("Variable"))
+Base_comparaison <- left_join(Base_comparaison,beta_Alasso[,c(1,3)], by=c("Variable"))
+Base_comparaison <- left_join(Base_comparaison,select_tree, by=c("Variable"))
+
+colnames(Base_comparaison) <- c("Variable","GETS","RIDGE","LASSO","ELASTIC NET", "SCAD", "ADAPT. LASSO", "RF")
+
+#write.xlsx(Base_comparaison, file = "Base_comparaison.xlsx" , overwrite =T)
+#################################################################################
 
