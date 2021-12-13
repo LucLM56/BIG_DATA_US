@@ -21,10 +21,11 @@ library(tibble)
 library(ncvreg)
 library(randomForest)
 library(caret)
+library(RColorBrewer) #Pour obtenir des palettes de couleurs
 
 ##################### IMPORTATION ET PREMIERS TRAITEMENTS ##################################
-#setwd("D:/Dossiers/Etudes/M2 EKAP/Big Data/Projet")
-setwd("/Users/cecilemocher/Documents/M2/EconomeÃÅtrie des big data/Projet Bigdata")
+setwd("D:/Dossiers/Etudes/M2 EKAP/Big Data/Projet")
+#setwd("/Users/cecilemocher/Documents/M2/EconomeÃÅtrie des big data/Projet Bigdata")
 base <- read.csv("US.csv", sep=",")
 
 str(base)
@@ -478,7 +479,7 @@ Alasso_predict #Prevision pour Adaptative LASSO
 library("VSURF")
 library(randomForest)
 set.seed(09122021)
-tree_selection2 <- VSURF(x = x, y = y, mtry = 100) #Long - environ 2H
+#tree_selection2 <- VSURF(x = x, y = y, mtry = 100) #Long - environ 2H
 tree_selection2$varselect.thres # 6  12  15   7   9  13  70  50 122  73  88  64  17  16  75  44  63  93  89  62  69  30  57  90   8  77  58  85  29  86  87  74 106  91  40  36   4
 tree_selection2$varselect.interp # 6  12  15   7   9  13  70  50 122  73  88  64  17  16  75  44  63  93  89  62  69  30
 tree_selection2$varselect.pred # 6  12  15   7   9  70  50 122  64  17  93  89  30
@@ -499,7 +500,7 @@ tree_selection2
 
 #Modele a utiliser d'apres les variables selectionnees :
 #Selection de la base
-base_RF <- base4[,tree_selection2$varselect.pred]
+base_RF <- base4[,c(6,  12,  15 ,  7 ,  9 , 70  ,50 ,122 , 64 , 17 , 93 , 89,  30)]
 rdf=randomForest(formula=INDPRO~.,data=base_RF, ntree=100, mtry=3, nodesize = 10)
 print(rdf)
 plot(rdf)
@@ -512,8 +513,15 @@ RF_predict #Prediction pour RF
 ####################### Assemblage des previsions #####################################
 Prevision <- cbind(base4_test_y,RIDGE_predict, LASSO_predict,Alasso_predict,Elastic_NET_predict,SCAD_predict,RF_predict)
 colnames(Prevision) <- c("Observe", "RIDGE","LASSO","ADAPT. LASSO", "ELASTIC NET", "SCAD", "RF")
-write.xlsx(Prevision, file = "Prevision.xlsx" ,col.names = TRUE, row.names = TRUE)
+Prevision = as.data.frame(round(Prevision,2))
+write.xlsx(Prevision, file = "Prevision.xlsx" , overwrite =T)
 #Manque GETS mais ne marche pas pour l'instant ...
+
+par(mar=c(5.1, 4.1, 4.1, 8.1), xpd=TRUE)
+matplot(row(Prevision ),Prevision ,type="l", xlab="PÈriode",
+        ylab="Production industrielle (USA)", main="", col=brewer.pal(n = 7, name = "Paired"), lwd=3)
+#On ajoute la lÈgende
+legend("topright", inset=c(-0.5,0),legend = colnames(Prevision ),lwd = 2 ,cex=0.7,col=brewer.pal(n = 7, name = "Paired"))
 #######################################################################################
 
 
